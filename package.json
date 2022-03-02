@@ -1,0 +1,107 @@
+{
+    "name": "kubert-vscode-extension",
+    "displayName": "KubeRT VS Code extension",
+    "description": "KubeRT for VS Code",
+    "version": "1.0.0",
+    "publisher": "jahed",
+    "license": "EPL-1.0",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/qumase/kubert-vscode-extension.git"
+    },
+    "bugs": {
+        "url": "https://github.com/qumase/kubert-vscode-extension/issues"
+    },
+    "engines": {
+        "vscode": "^1.55.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "main": "out/extension",
+    "activationEvents": [
+        "onLanguage:rt"
+    ],
+    "contributes": {
+        "configuration": {
+            "type": "object",
+            "title": "KubeRT Configuration",
+            "properties": {
+                "kubert.outputdir": {
+                    "scope": "window",
+                    "type": "string",
+                    "default": "",
+                    "description": "KubeRT outpur directory"
+                },
+                "kubert.namespace": {
+                    "scope": "window",
+                    "type": "string",
+                    "default": "kubert",
+                    "description": "Kubernetes namespace"
+                },
+                "kubert.appname": {
+                    "scope": "window",
+                    "type": "string",
+                    "default": "umlrt",
+                    "description": "Kubernetes application name"
+                },
+                "kubert.repo": {
+                    "scope": "window",
+                    "type": "string",
+                    "default": "",
+                    "description": "Docker repository, e.g. 'username/'"
+                },
+                "kubert.image": {
+                    "scope": "window",
+                    "type": "string",
+                    "default": "kjahed/umlrt-rts:1.0",
+                    "description": "Base image for generated images, e.g. 'kjahed/umlrt-rts:1.0'"
+                },
+                "kubert.args": {
+                    "scope": "window",
+                    "type": "string",
+                    "default": "",
+                    "description": "Command-line arguments for UML-RT application"
+                },
+                "kubert.debug": {
+                    "scope": "window",
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Enable debugging"
+                }
+            }
+        },
+        "commands": [
+            {
+                "command": "kubert.gen",
+                "title": "Generate KubeRT project"
+            }
+        ],
+        "menus": {
+            "editor/context": [
+                {
+                    "when": "resourceLangId == rt",
+                    "command": "kubert.gen",
+                    "group": "KubeRT@1"
+                }
+            ]
+        }
+    },
+    "devDependencies": {
+        "@types/node": "^11.13.2",
+        "typescript": "^3.3.400",
+        "vscode": "^1.1.37"
+    },
+    "dependencies": {
+        "vsce": "^1.103.1"
+    },
+    "extensionDependencies": [
+        "jahed.rtpoet-vscode-extension"
+    ],
+    "scripts": {
+        "prepublish": "node ./node_modules/vscode/bin/install && tsc -p ./src",
+        "compile": "tsc -p ./src",
+        "watch": "tsc -w -p ./src",
+        "update-vscode": "node ./node_modules/vscode/bin/install"
+    }
+}

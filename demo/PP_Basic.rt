@@ -1,0 +1,120 @@
+model PP_Basic {
+
+	protocol PingPongProtocol {
+		in message ping()
+		out message pong()
+	}
+
+
+	capsule Pinger {
+		external auto port pingPongPort: ~PP_Basic.PingPongProtocol[1]
+		internal auto port log: RTSLibrary.Log[1]
+
+		statemachine {
+			initial AeTJA
+			state Playing
+
+			transition {
+				from AeTJA
+				to Playing
+
+				action `
+					// Start the game by sending a "ping" to the other player
+					log.log("Starting game");
+					if ( pingPongPort.ping().send() ) {
+					log.log( "ping sent!");
+					} else {
+					log.log( "Error sending Ping!");
+					}
+				`
+
+			}
+
+
+			transition {
+				from Playing
+				to Playing
+
+				triggers {
+					from pingPongPort on pong
+				}
+
+
+				action `
+					// Reply to a pong message by sending a ping.
+					log.log("Pong received!!!!!!!!!!!!");
+					if ( pingPongPort.ping().send() ) {
+					log.log( "ping sent!");
+					} else {
+					log.log( "Error sending Ping!");
+					}
+				`
+
+			}
+
+		}
+
+	}
+
+
+	capsule Ponger {
+		protected attribute hitCount: int[1]= 0
+		external auto port pingPongPort: PP_Basic.PingPongProtocol[1]
+		internal auto port log: RTSLibrary.Log[1]
+
+		statemachine {
+			initial ywFdt
+			state Playing
+
+			transition {
+				from ywFdt
+				to Playing
+
+				action `
+					log.log("Ponger is ready");
+				`
+
+			}
+
+
+			transition {
+				from Playing
+				to Playing
+
+				triggers {
+					from pingPongPort on ping
+				}
+
+
+				action `
+					// Reply to a ping message by sending a pong.
+					log.log("Ping received!");
+					if (hitCount <=5 || 1){
+					if ( pingPongPort.pong().send() ){
+					log.log( "pong sent!");
+					} else {
+					log.log( "Error sending Pong!");
+					}
+					} else { log.log( "Game over!");}
+					hitCount++;
+				`
+
+			}
+
+		}
+
+	}
+
+
+	top capsule Top {
+		fixed part wrapper: PP_Basic.Wrapper[1]
+	}
+
+
+	capsule Wrapper {
+		fixed part pinger: PP_Basic.Pinger[1]
+		fixed part ponger: PP_Basic.Ponger[1]
+		connect pinger.pingPongPort to ponger.pingPongPort
+	}
+
+}

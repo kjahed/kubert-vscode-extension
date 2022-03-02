@@ -1,0 +1,19 @@
+# VS Code
+*.vsix
+.vscode
+.history/
+
+# Build
+build/
+out/
+.gradle/
+node_modules/
+
+# Project specific
+src/kubert/
+demo/src-gen/
+demo/.devcontainer/
+
+# OS
+.DS_Store
+Thumbs.db

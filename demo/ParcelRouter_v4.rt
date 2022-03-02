@@ -1,0 +1,1146 @@
+model ParcelRouter_v4 {
+
+	protocol TransmissionProt {
+		in message free()
+		out message transmit(p: ParcelRouter_v4.Parcel[1])
+	}
+
+
+	protocol DetectionProt {
+		out message detect(dest: int[1])
+	}
+
+
+	protocol SwitchProt {
+		out message setSwitch(dir: int[1])
+	}
+
+
+	protocol StageInitProt {
+		out message init(pos: int[1], chute1Del: int[1], chute2Del: int[1], switchDel: int[1])
+	}
+
+
+	protocol GenProt {
+		in message init(num: int[1], del: int[1])
+		out message generated(dest: int[1])
+		out message done()
+	}
+
+
+	protocol BinProt {
+		out message arrived(dest: int[1])
+	}
+
+
+	protocol ChuteProt {
+		out message init(del: int[1], pos: int[1])
+	}
+
+
+	protocol SensorProt {
+		out message init(pos: int[1])
+	}
+
+
+	class Parcel {
+		public attribute destination: int[1]
+	}
+
+
+	top capsule ParcelRouter {
+
+		header preface `
+			#include "umlrtmain.hh"
+		`
+
+		public attribute g0: int[1]= 0
+		public attribute g1: int[1]= 0
+		public attribute g3: int[1]= 0
+		public attribute g2: int[1]= 0
+		public attribute a0: int[1]= 0
+		public attribute a1: int[1]= 0
+		public attribute a2: int[1]= 0
+		public attribute a3: int[1]= 0
+		public attribute genDone: `bool`[1]= null
+		public attribute maxParcels: int[1]= 10
+		public attribute delayGen: int[1]= 2
+		public attribute delayChute1: int[1]= 1
+		public attribute delayChute2: int[1]= 1
+		public attribute startTime: RTSLibrary.Timespec[1]
+		public attribute delaySwitch: int[1]= 1
+		public attribute aErr: int[1]= 0
+
+		public operation incGenerated(dest: int[1]) `
+			if (dest==0)
+			g0++;
+			else if (dest==1)
+			g1++;
+			else if (dest==2)
+			g2++;
+			else
+			g3++;
+		`
+
+		internal auto port initS0P: ParcelRouter_v4.StageInitProt[1]
+		internal auto port loggerP: RTSLibrary.Log[1]
+		internal auto port initS2P: ParcelRouter_v4.StageInitProt[1]
+		internal auto port initS1P: ParcelRouter_v4.StageInitProt[1]
+		internal auto port bin3P: ~ParcelRouter_v4.BinProt[1]
+		internal auto port bin2P: ~ParcelRouter_v4.BinProt[1]
+		internal auto port bin1P: ~ParcelRouter_v4.BinProt[1]
+		internal auto port bin0P: ~ParcelRouter_v4.BinProt[1]
+		internal auto port genP: ~ParcelRouter_v4.GenProt[1]
+		fixed part gen: ParcelRouter_v4.Gen[1]
+		fixed part s0: ParcelRouter_v4.Stage[1]
+		fixed part s2: ParcelRouter_v4.Stage[1]
+		fixed part s1: ParcelRouter_v4.Stage[1]
+		fixed part b1: ParcelRouter_v4.Bin[1]
+		fixed part b2: ParcelRouter_v4.Bin[1]
+		fixed part b3: ParcelRouter_v4.Bin[1]
+		fixed part b0: ParcelRouter_v4.Bin[1]
+		connect gen.enterP to s0.enterP
+		connect s2.rightP to b3.enterP
+		connect s2.leftP to b2.enterP
+		connect s1.rightP to b1.enterP
+		connect s1.leftP to b0.enterP
+		connect s0.initP to initS0P
+		connect initS2P to s2.initP
+		connect initS1P to s1.initP
+		connect genP to gen.genP
+		connect bin0P to b0.binP
+		connect bin1P to b1.binP
+		connect bin2P to b2.binP
+		connect bin3P to b3.binP
+		connect s0.leftP to s1.enterP
+		connect s0.rightP to s2.enterP
+
+		statemachine {
+			initial XOPgl
+			state State1
+			state Done
+			choice UUrKC
+
+			transition {
+				from XOPgl
+				to State1
+
+				action `
+					// receiving command line arguments
+					int argc = UMLRTMain::getArgCount();
+					if (argc==5) {
+					const char * arg1 = UMLRTMain::getArg(0);
+					maxParcels = atoi(arg1);
+					const char * arg2 = UMLRTMain::getArg(1);
+					delayGen  = atoi(arg2);
+					const char * arg3 = UMLRTMain::getArg(2);
+					delayChute1  = atoi(arg3);
+					const char * arg4 = UMLRTMain::getArg(3);
+					delayChute2  = atoi(arg4);
+					const char * arg5 = UMLRTMain::getArg(4);
+					delaySwitch  = atoi(arg5);
+					}
+					else if (argc=1) {
+					const char * arg1 = UMLRTMain::getArg(0);
+					maxParcels = atoi(arg1);
+					}
+					loggerP.log("[ParcelRouter] starting up");
+					loggerP.log("[ParcelRouter] initializing generator: maxParcels=%d, delayGen=%d", maxParcels, delayGen);
+					genP.init(maxParcels,delayGen).send();
+					loggerP.log("[ParcelRouter] initializing stages: delayChute1=%d, delayChute2=%d, delaySwitch=%d", delayChute1, delayChute2, delaySwitch);
+					initS0P.init(0,delayChute1,delayChute2,delaySwitch).send();
+					initS1P.init(1,delayChute1,delayChute2,delaySwitch).send();
+					initS2P.init(2,delayChute1,delayChute2,delaySwitch).send();
+					UMLRTTimespec::getclock(&startTime);
+				`
+
+			}
+
+
+			transition {
+				from State1
+				to State1
+
+				triggers {
+					from genP on generated
+				}
+
+
+				action `
+					incGenerated(dest);
+					loggerP.log("[ParcelRouter] total generated: %d %d %d %d", g0, g1, g2, g3);
+				`
+
+			}
+
+
+			transition {
+				from State1
+				to UUrKC
+
+				triggers {
+					from bin0P on arrived
+				}
+
+
+				action `
+					if (dest==0)
+					a0++;
+					else {
+					loggerP.log("[ParcelRouter] ERROR: incorrect routing");
+					aErr++;
+					}
+				`
+
+			}
+
+
+			transition {
+				from State1
+				to UUrKC
+
+				triggers {
+					from bin1P on arrived
+				}
+
+
+				action `
+					if (dest==1)
+					a1++;
+					else {
+					loggerP.log("[ParcelRouter] ERROR: incorrect routing");
+					aErr++;
+					}
+				`
+
+			}
+
+
+			transition {
+				from State1
+				to UUrKC
+
+				triggers {
+					from bin2P on arrived
+				}
+
+
+				action `
+					if (dest==2)
+					a2++;
+					else {
+					loggerP.log("[ParcelRouter] ERROR: incorrect routing");
+					aErr++;
+					}
+				`
+
+			}
+
+
+			transition {
+				from State1
+				to UUrKC
+
+				triggers {
+					from bin3P on arrived
+				}
+
+
+				action `
+					if (dest==3)
+					a3++;
+					else {
+					loggerP.log("[ParcelRouter] ERROR: incorrect routing");
+					aErr++;
+					}
+				`
+
+			}
+
+
+			transition {
+				from State1
+				to UUrKC
+
+				triggers {
+					from genP on done
+				}
+
+
+				action `
+					loggerP.log("[ParcelRouter] received generator done");
+					genDone = true;
+				`
+
+			}
+
+
+			transition {
+				from UUrKC
+				to Done
+
+				guard `
+					return (genDone && (g0+g1+g2+g3)==(a0+a1+a2+a3+aErr));
+				`
+
+
+				action `
+					loggerP.log("[ParcelRouter] total generations: %d %d %d %d", g0, g1, g2, g3);
+					loggerP.log("[ParcelRouter] total arrivals:    %d %d %d %d, total errors: %d", a0, a1, a2, a3, aErr);
+					loggerP.log("[ParcelRouter] delay settings: %d %d %d %d", delayGen, delayChute1, delayChute2, delaySwitch);
+					UMLRTTimespec now;
+					UMLRTTimespec::getclock(&now);
+					// compute difference
+					UMLRTTimespec diff = now - startTime;
+					loggerP.log("[ParcelRouter] duration: %ld sec, %ld nsec", diff.tv_sec, diff.tv_nsec);
+					loggerP.log("[ParcelRouter] stop");
+					// log.log("[ParcelRouter] startTime sec: %ld", startTime.tv_sec);
+					// log.log("Pinger: startTime nsec: %ld", startTime.tv_nsec);
+					// log.log("Pinger: now sec: %ld", now.tv_sec);
+					// log.log("Pinger: now nsec: %ld", now.tv_nsec);
+				`
+
+			}
+
+
+			transition {
+				from UUrKC
+				to State1
+
+				action `
+					loggerP.log("[ParcelRouter] total arrivals: %d %d %d %d, total errors: %d", a0, a1, a2, a3, aErr);
+				`
+
+			}
+
+		}
+
+	}
+
+
+	capsule Gen {
+		public attribute parcel: ParcelRouter_v4.Parcel[1]
+		public attribute delay: int[1]= 1
+		public attribute maxParcels: int[1]= 0
+		public attribute i: int[1]= 0
+		external auto port enterP: ParcelRouter_v4.TransmissionProt[1]
+		internal auto port timerP: RTSLibrary.Timing[1]
+		internal auto port loggerP: RTSLibrary.Log[1]
+		external auto port genP: ParcelRouter_v4.GenProt[1]
+
+		statemachine {
+			initial sdtSxbKO
+			state Generating
+
+			state WaitingForFree {
+
+				entry `
+					enterP.recallAll();
+				`
+
+			}
+
+			state WaitingForInit
+			choice fKPzZ
+			state Done
+
+			transition {
+				from sdtSxbKO
+				to WaitingForInit
+
+				action `
+					loggerP.log("[Gen] starting up");
+					// initializing random number generator
+					srand(time(0));
+				`
+
+			}
+
+
+			transition {
+				from fKPzZ
+				to WaitingForFree
+
+				guard `
+					return (i<maxParcels);
+				`
+
+
+				action `
+					int random = rand() % 4;
+					parcel = Parcel();
+					// 'destination' indicates destination bin
+					parcel.destination = random;
+					loggerP.log("[Gen] generating parcel with destination=%d", random);
+					genP.generated(random).send();
+				`
+
+			}
+
+
+			transition {
+				from WaitingForFree
+				to Generating
+
+				triggers {
+					from enterP on free
+				}
+
+
+				action `
+					enterP.transmit(parcel).send();
+					// increment loop counter
+					i++;
+					// setting timer
+					timerP.informIn(UMLRTTimespec(this->delay,0));
+				`
+
+			}
+
+
+			transition {
+				from Generating
+				to Generating
+
+				triggers {
+					from enterP on free
+				}
+
+
+				action `
+					msg->defer();
+				`
+
+			}
+
+
+			transition {
+				from WaitingForInit
+				to Generating
+
+				triggers {
+					from genP on init
+				}
+
+
+				action `
+					loggerP.log("[Gen] parcels to generate: %d, delay: %d", num, del);
+					this->maxParcels = num;
+					this->delay = del;
+					// setting timer
+					timerP.informIn(UMLRTTimespec(this->delay,0));
+				`
+
+			}
+
+
+			transition {
+				from fKPzZ
+				to Done
+
+				action `
+					loggerP.log("[Gen] done");
+					// tell ParcelRouter that generation is done
+					genP.done().send();
+				`
+
+			}
+
+
+			transition {
+				from Generating
+				to fKPzZ
+
+				triggers {
+					from timerP on timeout
+				}
+
+			}
+
+
+			transition {
+				from WaitingForInit
+				to WaitingForInit
+
+				triggers {
+					from enterP on free
+				}
+
+
+				action `
+					msg->defer();
+				`
+
+			}
+
+
+			transition {
+				from Done
+				to Done
+
+				triggers {
+					from enterP on free
+				}
+
+			}
+
+		}
+
+	}
+
+
+	capsule Stage {
+		public attribute parcel: ParcelRouter_v4.Parcel[1]
+		relay auto port enterP: ~ParcelRouter_v4.TransmissionProt[1]
+		relay auto port rightP: ParcelRouter_v4.TransmissionProt[1]
+		relay auto port leftP: ParcelRouter_v4.TransmissionProt[1]
+		internal auto port loggerP: RTSLibrary.Log[1]
+		external auto port initP: ~ParcelRouter_v4.StageInitProt[1]
+		internal auto port sensorP: ParcelRouter_v4.SensorProt[1]
+		internal auto port chute1P: ParcelRouter_v4.ChuteProt[1]
+		internal auto port chute2P: ParcelRouter_v4.ChuteProt[1]
+		internal auto port switcherP: ParcelRouter_v4.ChuteProt[1]
+		fixed part chute1: ParcelRouter_v4.Chute[1]
+		fixed part chute2: ParcelRouter_v4.Chute[1]
+		fixed part sensor: ParcelRouter_v4.Sensor[1]
+		fixed part switcher: ParcelRouter_v4.Switcher[1]
+		connect chute1.detectP to sensor.detectP
+		connect sensor.switcherP to switcher.switcherP
+		connect enterP to chute1.enterP
+		connect switcher.rightP to rightP
+		connect switcher.leftP to leftP
+		connect chute2.exitP to switcher.enterP
+		connect sensorP to sensor.initP
+		connect chute1P to chute1.initP
+		connect chute2P to chute2.initP
+		connect switcherP to switcher.initP
+		connect chute2.enterP to chute1.exitP
+
+		statemachine {
+			initial irauj
+			state WaitingForInit
+			state State1
+
+			transition {
+				from irauj
+				to WaitingForInit
+
+				action `
+					loggerP.log("[Stage] Starting up");
+				`
+
+			}
+
+
+			transition {
+				from WaitingForInit
+				to State1
+
+				triggers {
+					from initP on init
+				}
+
+
+				action `
+					loggerP.log("[Stage] received position %d, becoming Stage%d", pos, pos);
+					loggerP.log("[Stage%d] initializing sensor", pos);
+					sensorP.init(pos).send();
+					loggerP.log("[Stage%d] initializing chute1: delay=%d", pos, chute1Del);
+					chute1P.init(chute1Del, pos).send();
+					loggerP.log("[Stage%d] initializing chute2: delay=%d", pos, chute2Del);
+					chute2P.init(chute2Del, pos).send();
+					loggerP.log("[Stage%d] initializing switch: delay=%d", pos, switchDel);
+					switcherP.init(switchDel, pos).send();
+				`
+
+			}
+
+		}
+
+	}
+
+
+	capsule Bin {
+		public attribute parcels: ParcelRouter_v4.Parcel[-1]
+		external auto port enterP: ~ParcelRouter_v4.TransmissionProt[1]
+		internal auto port loggerP: RTSLibrary.Log[1]
+		external auto port binP: ParcelRouter_v4.BinProt[1]
+
+		statemachine {
+			initial QtfZwuZO
+
+			state WaitingForParcels {
+
+				entry `
+					enterP.free().send();
+				`
+
+			}
+
+
+			transition {
+				from QtfZwuZO
+				to WaitingForParcels
+
+				action `
+					loggerP.log("[Bin] starting up");
+				`
+
+			}
+
+
+			transition {
+				from WaitingForParcels
+				to WaitingForParcels
+
+				triggers {
+					from enterP on transmit
+				}
+
+
+				action `
+					loggerP.log("[Bin] received parcel for %d%", p.destination);
+					// tell ParcelRouter that parcel for 'p.destination' has arrived
+					binP.arrived(p.destination).send();
+				`
+
+			}
+
+		}
+
+	}
+
+
+	capsule Chute {
+		public attribute parcel: ParcelRouter_v4.Parcel[1]
+		public attribute delay: int[1]= 0
+		public attribute position: int[1]
+		external auto port enterP: ~ParcelRouter_v4.TransmissionProt[1]
+		external auto port exitP: ParcelRouter_v4.TransmissionProt[1]
+		external auto port detectP: ParcelRouter_v4.DetectionProt[1]
+		internal auto port loggerP: RTSLibrary.Log[1]
+		internal auto port timerP: RTSLibrary.Timing[1]
+		external auto port initP: ~ParcelRouter_v4.ChuteProt[1]
+
+		statemachine {
+			initial dxozyCes
+
+			state Free {
+
+				entry `
+					// recall any parcels that may have arrived in the meantime
+					enterP.recallAll();
+				`
+
+			}
+
+			state Occupied
+
+			state WaitingForFreeSignal {
+
+				entry `
+					// recall any 'free' messages that may have arrived in the meantime
+					exitP.recallAll();
+				`
+
+			}
+
+			state WaitingForInit
+
+			transition {
+				from WaitingForInit
+				to Free
+
+				triggers {
+					from initP on init
+				}
+
+
+				action `
+					this->delay = del;
+					this->position = pos;
+					enterP.free().send();
+				`
+
+			}
+
+
+			transition {
+				from Free
+				to Occupied
+
+				triggers {
+					from enterP on transmit
+				}
+
+
+				action `
+					// receive parcel
+					this->parcel = Parcel();
+					this->parcel.destination = p.destination;
+					loggerP.log("[Stage%d][%s](Occupied) destination=%d", position, this->getName(), p.destination);
+					// set timer to simulate passage of parcel through chute
+					timerP.informIn(UMLRTTimespec(this->delay,0));
+				`
+
+			}
+
+
+			transition {
+				from WaitingForFreeSignal
+				to Free
+
+				triggers {
+					from exitP on free
+				}
+
+
+				action `
+					// pass parcel destination to sensor to allow it to determine direction
+					detectP.detect(this->parcel.destination).send();
+					// pass on parcel to either next chute or switcher
+					exitP.transmit(this->parcel).send();
+					// signal 'free' to previous chute, switcher, or gen
+					loggerP.log("[Stage%d][%s](Free)", position, this->getName());
+					enterP.free().send();
+				`
+
+			}
+
+
+			transition {
+				from Occupied
+				to WaitingForFreeSignal
+
+				triggers {
+					from timerP on timeout
+				}
+
+			}
+
+
+			transition {
+				from Free
+				to Free
+
+				triggers {
+					from exitP on free
+				}
+
+
+				action `
+					msg->defer();
+				`
+
+			}
+
+
+			transition {
+				from Occupied
+				to Occupied
+
+				triggers {
+					from exitP on free
+					from enterP on transmit
+				}
+
+
+				action `
+					msg->defer();
+				`
+
+			}
+
+
+			transition {
+				from WaitingForFreeSignal
+				to WaitingForFreeSignal
+
+				triggers {
+					from enterP on transmit
+				}
+
+
+				action `
+					msg->defer();
+				`
+
+			}
+
+
+			transition {
+				from dxozyCes
+				to WaitingForInit
+			}
+
+
+			transition {
+				from WaitingForInit
+				to WaitingForInit
+
+				triggers {
+					from exitP on free
+					from enterP on transmit
+				}
+
+
+				action `
+					msg->defer();
+				`
+
+			}
+
+		}
+
+	}
+
+
+	capsule Sensor {
+		public attribute position: int[1]= 0
+
+		public operation computeDirection(p: int[1], d: int[1]): int `
+			// determine if parcel needs to go left or right
+			// depends on position of stage p and destination d of parcel
+			// 0 == left
+			// 1 == right
+			if (p==0 && d<=1)
+			return 0;
+			else if (p==0 && d>1)
+			return 1;
+			else if (p==1 && d==0)
+			return 0;
+			else if (p==1 && d==1)
+			return 1;
+			else if (p==2 && d==2)
+			return 0;
+			else return 1;
+			// int reducedNumber = d/p;
+			// int isOdd = reducedNumber % 2;
+			// if (isOdd==0)
+			//
+			//    int isOdd = reducedNumber % 2;
+			//   if (isOdd== 0) {
+			//   logger.show("At stage %s (%d), turn left.\n", getName(), p.level);
+			// send parcel to switch on left
+			//   switchProtocol.setSwitch(0).send();
+			//    }
+			//    else {
+			//    logger.show("At stage %s (%d), turn right.\n", getName(), p.level);
+			// send parcel to switch on right
+			//    switchProtocol.setSwitch(1).send();
+			//    }
+		`
+
+		external auto port detectP: ~ParcelRouter_v4.DetectionProt[1]
+		external auto port switcherP: ParcelRouter_v4.SwitchProt[1]
+		internal auto port loggerP: RTSLibrary.Log[1]
+		external auto port initP: ~ParcelRouter_v4.SensorProt[1]
+
+		statemachine {
+			initial JRjtOwUn
+			state WaitingForDestinationInfo
+			state WaitingForInit
+
+			transition {
+				from JRjtOwUn
+				to WaitingForInit
+
+				action `
+					loggerP.log("[Sensor] Starting up");
+				`
+
+			}
+
+
+			transition {
+				from WaitingForDestinationInfo
+				to WaitingForDestinationInfo
+
+				triggers {
+					from detectP on detect
+				}
+
+
+				action `
+					loggerP.log("[Sensor%d] received destination: %d", position, dest);
+					loggerP.show("[Sensor%d] computed direction: ");
+					int dir = computeDirection(position,dest);
+					if (dir==0)
+					loggerP.log("left");
+					else
+					loggerP.log("right");
+					loggerP.log("[Sensor%d] sending %d to switch", position, dir);
+					switcherP.setSwitch(dir).send();
+				`
+
+			}
+
+
+			transition {
+				from WaitingForInit
+				to WaitingForDestinationInfo
+
+				triggers {
+					from initP on init
+				}
+
+
+				action `
+					loggerP.log("[Sensor] received position %d, becoming Sensor%d", pos, pos);
+					this->position = pos;
+					detectP.recall();
+				`
+
+			}
+
+
+			transition {
+				from WaitingForInit
+				to WaitingForInit
+
+				triggers {
+					from detectP on detect
+				}
+
+
+				action `
+					msg->defer();
+				`
+
+			}
+
+		}
+
+	}
+
+
+	capsule Switcher {
+		public attribute direction: int[1]
+		public attribute parcel: ParcelRouter_v4.Parcel[1]
+		public attribute delay: int[1]= 1
+		public attribute position: int[1]
+		external auto port switcherP: ~ParcelRouter_v4.SwitchProt[1]
+		external auto port rightP: ParcelRouter_v4.TransmissionProt[1]
+		external auto port leftP: ParcelRouter_v4.TransmissionProt[1]
+		external auto port enterP: ~ParcelRouter_v4.TransmissionProt[1]
+		internal auto port loggerP: RTSLibrary.Log[1]
+		internal auto port timerP: RTSLibrary.Timing[1]
+		external auto port initP: ~ParcelRouter_v4.ChuteProt[1]
+
+		statemachine {
+			initial VhBXBDIG
+			state Free
+
+			composite state Occupied {
+			}
+
+
+			state WaitingForFreeSignal {
+
+				entry `
+					// waiting for 'free' from next chute/bin
+					if(direction == 1)
+					rightP.recall();
+					else
+					leftP.recall();
+				`
+
+			}
+
+			state WaitingForInit
+
+			transition {
+				from WaitingForInit
+				to Free
+
+				triggers {
+					from initP on init
+				}
+
+
+				action `
+					// setting delay and position
+					this->delay = del;
+					this->position = pos;
+					// tell upstream chute that switch is empty
+					enterP.free().send();
+				`
+
+			}
+
+
+			transition {
+				from Free
+				to Free
+
+				triggers {
+					from switcherP on setSwitch
+				}
+
+
+				action `
+					this->direction = dir;
+				`
+
+			}
+
+
+			transition {
+				from Free
+				to Occupied
+
+				triggers {
+					from enterP on transmit
+				}
+
+
+				action `
+					// receive parcel
+					this->parcel = Parcel();
+					this->parcel.destination = p.destination;
+					loggerP.log("[Stage%d][Switcher](Occupied) destination=%d", position, p.destination);
+					// set timer to simulate passage of parcel through switch
+					timerP.informIn(UMLRTTimespec(this->delay,0));
+				`
+
+			}
+
+
+			transition {
+				from Occupied
+				to Occupied
+
+				triggers {
+					from switcherP on setSwitch
+				}
+
+
+				action `
+					// can't set switch when switch is occupied
+					msg->defer();
+				`
+
+			}
+
+
+			transition {
+				from Occupied
+				to WaitingForFreeSignal
+
+				triggers {
+					from timerP on timeout
+				}
+
+			}
+
+
+			transition {
+				from WaitingForFreeSignal
+				to Free
+
+				triggers {
+					from rightP, leftP on free
+				}
+
+
+				action `
+					// assuming that 'direction' has been set previously by sensor to indicate direction
+					if (direction == 0) {
+					// send parcel to 'left' port
+					leftP.transmit(this->parcel).send();
+					}
+					else {
+					// send parcel to 'right' port
+					rightP.transmit(this->parcel).send();
+					}
+					loggerP.log("[Stage%d][Switcher](Free)", position);
+					enterP.free().send();
+					// recall input from sensor
+					switcherP.recall();
+				`
+
+			}
+
+
+			transition {
+				from Free
+				to Free
+
+				triggers {
+					from rightP, leftP on free
+				}
+
+
+				action `
+					msg->defer();
+				`
+
+			}
+
+
+			transition {
+				from Occupied
+				to Occupied
+
+				triggers {
+					from rightP, leftP on free
+					from enterP on transmit
+				}
+
+
+				action `
+					// deferring 'free' from next chute/switcher and 'transmit' previous chute
+					msg->defer();
+				`
+
+			}
+
+
+			transition {
+				from WaitingForFreeSignal
+				to WaitingForFreeSignal
+
+				triggers {
+					from enterP on transmit
+					from switcherP on setSwitch
+				}
+
+
+				action `
+					msg->defer();
+				`
+
+			}
+
+
+			transition {
+				from VhBXBDIG
+				to WaitingForInit
+
+				action `
+					loggerP.log("[Switch] starting up");
+				`
+
+			}
+
+
+			transition {
+				from WaitingForInit
+				to WaitingForInit
+
+				triggers {
+					from rightP, leftP on free
+				}
+
+
+				action `
+					msg->defer();
+				`
+
+			}
+
+		}
+
+	}
+
+}
